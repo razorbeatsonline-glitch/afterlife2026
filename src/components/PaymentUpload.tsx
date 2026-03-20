@@ -6,6 +6,7 @@ import type { UploadInfo } from '@/types/guest'
 type PaymentUploadProps = {
   value: UploadInfo | null
   onUploaded: (upload: UploadInfo | null) => void
+  onUploadStatusChange?: (uploading: boolean) => void
 }
 
 function getFileExtension(fileName: string) {
@@ -13,7 +14,11 @@ function getFileExtension(fileName: string) {
   return fileParts.length > 1 ? fileParts.at(-1) : 'jpg'
 }
 
-export function PaymentUpload({ value, onUploaded }: PaymentUploadProps) {
+export function PaymentUpload({
+  value,
+  onUploaded,
+  onUploadStatusChange,
+}: PaymentUploadProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(value?.url ?? null)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState('')
@@ -27,6 +32,7 @@ export function PaymentUpload({ value, onUploaded }: PaymentUploadProps) {
 
     setError('')
     setIsUploading(true)
+    onUploadStatusChange?.(true)
 
     try {
       const supabase = getSupabaseClient()
@@ -62,6 +68,7 @@ export function PaymentUpload({ value, onUploaded }: PaymentUploadProps) {
       )
     } finally {
       setIsUploading(false)
+      onUploadStatusChange?.(false)
     }
   }
 
