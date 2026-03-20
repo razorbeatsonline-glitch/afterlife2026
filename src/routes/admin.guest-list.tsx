@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { RefreshCw, Search } from 'lucide-react'
 
 import { fetchAdminGuestList, subscribeAdminRealtime } from '@/lib/admin/data'
@@ -62,6 +62,7 @@ function statusChipClass(status: string | null) {
 
 function AdminGuestListPage() {
   const supabase = useMemo(() => getSupabaseClient(), [])
+  const navigate = useNavigate()
   const [items, setItems] = useState<AdminGuestListItem[]>([])
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -165,11 +166,31 @@ function AdminGuestListPage() {
               </thead>
               <tbody>
                 {filteredItems.map((item) => (
-                  <tr key={item.groupId} className="admin-table-row">
+                  <tr
+                    key={item.groupId}
+                    className="admin-table-row admin-table-row-clickable"
+                    role="link"
+                    tabIndex={0}
+                    onClick={() =>
+                      void navigate({
+                        to: '/admin/guest/$groupId',
+                        params: { groupId: item.groupId },
+                      })
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        void navigate({
+                          to: '/admin/guest/$groupId',
+                          params: { groupId: item.groupId },
+                        })
+                      }
+                    }}
+                  >
                     <td className="px-4 py-3 align-top">
-                      <Link to="/admin/guest/$groupId" params={{ groupId: item.groupId }} className="admin-row-link">
+                      <span className="admin-row-link">
                         {item.leadFullName ?? 'Unnamed lead'}
-                      </Link>
+                      </span>
                       <p className="mt-1 text-xs text-zinc-400">{item.leadInstagram ?? 'No Instagram'}</p>
                     </td>
                     <td className="px-4 py-3 align-top text-zinc-200">{item.contactEmail ?? 'No email'}</td>
