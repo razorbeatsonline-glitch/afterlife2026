@@ -334,9 +334,7 @@ function SignupPage() {
           <h1 className="text-4xl font-black tracking-tight text-white sm:text-5xl">
             Afterlife Club 2026
           </h1>
-          <p className="text-sm uppercase tracking-[0.3em] text-red-200">
-            Premium Guest List Access
-          </p>
+          <p className="text-sm uppercase tracking-[0.3em] text-red-200">Guest List Access</p>
         </header>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
