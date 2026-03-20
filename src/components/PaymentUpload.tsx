@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 
 import { getSupabaseClient } from '@/lib/supabase'
-import type { UploadInfo } from '@/types/guest'
+import type { Gender, UploadInfo } from '@/types/guest'
 
 type PaymentUploadProps = {
+  leadGender: Gender | ''
   value: UploadInfo | null
   onUploaded: (upload: UploadInfo | null) => void
   onUploadStatusChange?: (uploading: boolean) => void
@@ -15,6 +16,7 @@ function getFileExtension(fileName: string) {
 }
 
 export function PaymentUpload({
+  leadGender,
   value,
   onUploaded,
   onUploadStatusChange,
@@ -24,6 +26,13 @@ export function PaymentUpload({
   const [error, setError] = useState('')
 
   const hasUpload = useMemo(() => Boolean(value?.url), [value])
+  const requiredPayment = useMemo(() => {
+    if (leadGender === 'female') {
+      return 1500
+    }
+
+    return 2000
+  }, [leadGender])
 
   const handleFileSelect = async (file: File | null) => {
     if (!file) {
@@ -80,6 +89,46 @@ export function PaymentUpload({
           Upload payment screenshot (required).
         </p>
       </div>
+
+      <section className="space-y-3 rounded-2xl border border-red-300/35 bg-[linear-gradient(150deg,rgba(190,18,44,0.34),rgba(15,15,17,0.9))] p-4 shadow-[0_16px_35px_rgba(0,0,0,0.45),0_0_24px_rgba(220,38,38,0.2)] sm:p-5">
+        <h4 className="text-sm font-semibold uppercase tracking-[0.16em] text-red-100">
+          Payment Details
+        </h4>
+        <div className="rounded-xl border border-red-200/20 bg-black/35 px-3 py-2.5">
+          <p className="text-[0.69rem] uppercase tracking-[0.16em] text-red-200/80">
+            Required Payment
+          </p>
+          <p className="mt-1 text-lg font-semibold text-white sm:text-xl">
+            Rs {requiredPayment}
+          </p>
+        </div>
+        <dl className="space-y-2.5">
+          <div className="rounded-xl border border-white/12 bg-black/30 px-3 py-2.5">
+            <dt className="text-[0.69rem] uppercase tracking-[0.16em] text-zinc-300">
+              Account Number
+            </dt>
+            <dd className="mt-1 text-base font-medium tracking-[0.04em] text-white">
+              0896753001
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/12 bg-black/30 px-3 py-2.5">
+            <dt className="text-[0.69rem] uppercase tracking-[0.16em] text-zinc-300">
+              Bank
+            </dt>
+            <dd className="mt-1 text-base font-medium text-white">
+              Dubai Islamic Bank
+            </dd>
+          </div>
+          <div className="rounded-xl border border-white/12 bg-black/30 px-3 py-2.5">
+            <dt className="text-[0.69rem] uppercase tracking-[0.16em] text-zinc-300">
+              Account Name
+            </dt>
+            <dd className="mt-1 text-base font-medium text-white">
+              Raza Abbas Zaidi
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <label className="field-label" htmlFor="payment-proof">
         Screenshot or receipt image

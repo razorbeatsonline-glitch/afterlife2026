@@ -402,7 +402,6 @@ function SignupPage() {
                 <option value="">Select gender</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
-                <option value="other">Other</option>
               </select>
             </div>
           </section>
@@ -415,23 +414,38 @@ function SignupPage() {
 
             {isMaleLead ? (
               <p className="text-sm text-red-100">
-                Male lead requires at least one additional guest.
+                Male guests must sign up with at least one additional guest.
               </p>
             ) : (
-              <label className="flex items-center gap-2 text-sm text-zinc-200">
-                <input
-                  type="checkbox"
-                  checked={wantsGroup}
-                  onChange={(event) => {
-                    const checked = event.currentTarget.checked
-                    setWantsGroup(checked)
-                    if (!checked) {
+              <div className="space-y-2">
+                <div
+                  className="group-mode-toggle"
+                  role="radiogroup"
+                  aria-label="Group mode"
+                >
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={!wantsGroup}
+                    className={!wantsGroup ? 'group-mode-option is-active' : 'group-mode-option'}
+                    onClick={() => {
+                      setWantsGroup(false)
                       setAdditionalGuests([])
-                    }
-                  }}
-                />
-                Continue solo or add a group
-              </label>
+                    }}
+                  >
+                    Solo
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={wantsGroup}
+                    className={wantsGroup ? 'group-mode-option is-active' : 'group-mode-option'}
+                    onClick={() => setWantsGroup(true)}
+                  >
+                    Group
+                  </button>
+                </div>
+              </div>
             )}
 
             {shouldShowGroupBuilder ? (
@@ -462,11 +476,12 @@ function SignupPage() {
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm text-zinc-300">Solo entry selected.</p>
+              <p className="text-sm text-zinc-300">You’re signing up solo.</p>
             )}
           </section>
 
           <PaymentUpload
+            leadGender={leadGender}
             value={paymentUpload}
             onUploaded={setPaymentUpload}
             onUploadStatusChange={setIsPaymentUploading}
