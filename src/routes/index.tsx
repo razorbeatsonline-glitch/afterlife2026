@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { Link, createFileRoute } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 
 import { GroupSummary } from '@/components/GroupSummary'
 import { GuestCard } from '@/components/GuestCard'
@@ -59,16 +59,20 @@ function asBoolean(value: unknown) {
 }
 
 function parseSignupResponse(data: unknown): SignupSuccess {
-  const row = (Array.isArray(data) ? data[0] : data) as
-    | Record<string, unknown>
-    | undefined
+  const row = data as Record<string, unknown> | null
 
   if (!row) {
     throw new Error('No ticket response received from server.')
   }
 
-  const ticketCode = readField<string>(row, ['ticket_code', 'ticketCode'], '')
-  const qrPayload = readField<string>(row, ['qr_payload', 'qrPayload'], '')
+  const ticketCode =
+    typeof row.ticket_code === 'string'
+      ? row.ticket_code
+      : readField<string>(row, ['ticketCode'], '')
+  const qrPayload =
+    typeof row.qr_payload === 'string'
+      ? row.qr_payload
+      : readField<string>(row, ['qrPayload'], '')
 
   if (!ticketCode || !qrPayload) {
     throw new Error('Ticket details were incomplete.')
@@ -93,11 +97,26 @@ function parseSignupResponse(data: unknown): SignupSuccess {
     groupCode: readField<string | null>(row, ['group_code', 'groupCode'], null),
     totalPeople: Number(readField<number>(row, ['total_people', 'totalPeople'], 1)),
     members,
-    groupCreated: asBoolean(readField(row, ['group_created'], false)),
+    groupCreated: asBoolean(row.group_created),
     groupMerged: asBoolean(readField(row, ['group_merged'], false)),
-    ticketReused: asBoolean(readField(row, ['ticket_reused'], false)),
+    ticketReused: asBoolean(row.ticket_reused),
     ticketNew: asBoolean(readField(row, ['ticket_new'], false)),
   }
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error && 'message' in error) {
+    const message = (error as { message?: unknown }).message
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  }
+
+  return 'Submission failed. Please retry.'
 }
 
 function SignupPage() {
@@ -108,6 +127,7 @@ function SignupPage() {
   const [wantsGroup, setWantsGroup] = useState(false)
   const [additionalGuests, setAdditionalGuests] = useState<GuestMember[]>([])
   const [paymentUpload, setPaymentUpload] = useState<UploadInfo | null>(null)
+  const [isPaymentUploading, setIsPaymentUploading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const [success, setSuccess] = useState<SignupSuccess | null>(null)
@@ -148,7 +168,7 @@ function SignupPage() {
       return true
     }
 
-    if (!paymentUpload) {
+    if (!paymentUpload || isPaymentUploading) {
       return true
     }
 
@@ -167,6 +187,7 @@ function SignupPage() {
     leadInstagram,
     leadName,
     paymentUpload,
+    isPaymentUploading,
   ])
 
   const handleGuestChange = (id: string, patch: Partial<GuestMember>) => {
@@ -203,22 +224,33 @@ function SignupPage() {
       return
     }
 
+    if (isPaymentUploading) {
+      setFormError('Payment upload is still in progress. Please wait to submit.')
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
       const supabase = getSupabaseClient()
+      if (!paymentUpload) {
+        throw new Error('Payment upload missing. Please upload and retry.')
+      }
+
       const membersPayload = [
         {
           person_type: 'lead',
           full_name: trimValue(leadName),
           instagram: trimValue(leadInstagram),
           gender: leadGender,
+          sort_order: 0,
         },
-        ...additionalGuests.map((guest) => ({
-          person_type: 'guest',
+        ...additionalGuests.map((guest, index) => ({
+          person_type: 'member',
           full_name: trimValue(guest.fullName),
           instagram: trimValue(guest.instagram),
           gender: guest.gender,
+          sort_order: index + 1,
         })),
       ]
 
@@ -233,7 +265,7 @@ function SignupPage() {
         members: membersPayload,
       }
 
-      const { data, error } = await supabase.rpc('create_or_merge_guest_signup', {
+      const rpcPayload = {
         p_lead_full_name: trimValue(leadName),
         p_lead_instagram: trimValue(leadInstagram),
         p_lead_gender: leadGender,
@@ -241,12 +273,22 @@ function SignupPage() {
         p_submitted_by_name: trimValue(leadName),
         p_submitted_by_instagram: trimValue(leadInstagram),
         p_submitted_by_gender: leadGender,
-        p_payment_screenshot_url: paymentUpload?.url,
-        p_payment_screenshot_path: paymentUpload?.path,
+        p_payment_screenshot_url: paymentUpload.url,
+        p_payment_screenshot_path: paymentUpload.path,
         p_members_json: membersPayload,
         p_raw_payload: rawPayload,
         p_qr_payload_base: QR_PAYLOAD_BASE,
-      })
+      }
+
+      console.log('create_or_merge_guest_signup payload', rpcPayload)
+
+      const { data, error } = await supabase.rpc(
+        'create_or_merge_guest_signup',
+        rpcPayload,
+      )
+
+      console.log('create_or_merge_guest_signup data', data)
+      console.error('create_or_merge_guest_signup error', error)
 
       if (error) {
         throw error
@@ -268,11 +310,8 @@ function SignupPage() {
         // Email placeholder is non-blocking.
       }
     } catch (submitErr) {
-      setFormError(
-        submitErr instanceof Error
-          ? submitErr.message
-          : 'Submission failed. Please retry.',
-      )
+      console.error('final submit error', submitErr)
+      setFormError(getErrorMessage(submitErr))
     } finally {
       setIsSubmitting(false)
     }
@@ -281,14 +320,8 @@ function SignupPage() {
   if (success) {
     return (
       <main className="afterlife-bg min-h-screen px-4 py-8 sm:px-6">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <div className="mx-auto w-full max-w-3xl">
           <QRSuccessCard success={success} />
-          <Link to="/" className="btn-primary text-center">
-            Submit Another Request
-          </Link>
-          <Link to="/gate-scanner" className="btn-outline text-center">
-            Open Gate Scanner
-          </Link>
         </div>
       </main>
     )
@@ -304,9 +337,6 @@ function SignupPage() {
           <p className="text-sm uppercase tracking-[0.3em] text-red-200">
             Premium Guest List Access
           </p>
-          <Link to="/gate-scanner" className="btn-outline mx-auto inline-block">
-            Gate Scanner
-          </Link>
         </header>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
@@ -404,10 +434,6 @@ function SignupPage() {
               </label>
             )}
 
-            <article className="rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
-              Lead guest is included automatically with <code>person_type='lead'</code>.
-            </article>
-
             {shouldShowGroupBuilder ? (
               <div className="space-y-3">
                 {additionalGuests.map((guest, index) => (
@@ -440,7 +466,11 @@ function SignupPage() {
             )}
           </section>
 
-          <PaymentUpload value={paymentUpload} onUploaded={setPaymentUpload} />
+          <PaymentUpload
+            value={paymentUpload}
+            onUploaded={setPaymentUpload}
+            onUploadStatusChange={setIsPaymentUploading}
+          />
 
           <GroupSummary
             leadName={leadName}
@@ -456,9 +486,13 @@ function SignupPage() {
           <button
             type="submit"
             className="btn-primary w-full"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isPaymentUploading}
           >
-            {isSubmitting ? 'Submitting...' : 'Request Guest List Access'}
+            {isSubmitting
+              ? 'Submitting...'
+              : isPaymentUploading
+                ? 'Waiting for upload...'
+                : 'Request Guest List Access'}
           </button>
         </form>
       </div>

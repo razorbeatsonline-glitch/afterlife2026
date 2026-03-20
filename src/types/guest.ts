@@ -31,18 +31,10 @@ export type SignupSuccess = {
 }
 
 export type ScanOutcome = {
-  status: 'accepted' | 'already_used' | 'invalid' | 'inactive'
+  status: 'accepted' | 'already_used' | 'invalid' | 'inactive' | 'error'
   message: string
   ticketCode?: string
   leadGuest?: string
-  leadInstagram?: string
-  leadGender?: string
-  totalPeople?: number
-  groupCode?: string | null
-  members?: Array<{
-    fullName: string
-    instagram: string
-    gender: string
-    personType?: string
-  }>
+  membersDebug?: string
+  members?: string[]
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Link, createFileRoute } from '@tanstack/react-router'
-import type { PostgrestError } from '@supabase/supabase-js'
 import type { Html5Qrcode, Html5QrcodeCameraScanConfig } from 'html5-qrcode'
 
 import { ScannerResultCard } from '@/components/ScannerResultCard'
@@ -12,112 +11,31 @@ export const Route = createFileRoute('/gate-scanner')({
   component: GateScannerPage,
 })
 
-type RpcArgs = Record<string, unknown>
+function parseTicketCode(rawValue: string) {
+  const raw = rawValue.trim()
 
-function readField<T>(record: Record<string, unknown>, keys: string[], fallback: T): T {
-  for (const key of keys) {
-    if (key in record) {
-      return record[key] as T
-    }
+  if (!raw) {
+    return ''
   }
 
-  return fallback
+  const ticketCode = raw.includes('/')
+    ? raw.split('/').pop()
+    : raw
+
+  return ticketCode?.trim() ?? ''
 }
 
-function parseScanResult(data: unknown): ScanOutcome {
-  const row = (Array.isArray(data) ? data[0] : data) as
-    | Record<string, unknown>
-    | undefined
-
-  if (!row) {
-    return {
-      status: 'invalid',
-      message: 'No ticket data returned.',
-    }
+function normalizeStatus(value: unknown): ScanOutcome['status'] {
+  if (
+    value === 'accepted'
+    || value === 'already_used'
+    || value === 'inactive'
+    || value === 'error'
+  ) {
+    return value
   }
 
-  const statusRaw = String(
-    readField(row, ['status', 'scan_status', 'result_status'], 'invalid'),
-  ).toLowerCase()
-  const status: ScanOutcome['status'] =
-    statusRaw === 'accepted' ||
-    statusRaw === 'already_used' ||
-    statusRaw === 'inactive'
-      ? statusRaw
-      : 'invalid'
-
-  const membersRaw = readField<unknown>(row, ['members', 'member_list'], [])
-  const members = Array.isArray(membersRaw)
-    ? membersRaw.map((member) => {
-        const payload = member as Record<string, unknown>
-        return {
-          fullName: readField<string>(payload, ['full_name', 'fullName'], ''),
-          instagram: readField<string>(payload, ['instagram', 'instagram_username'], ''),
-          gender: readField<string>(payload, ['gender'], ''),
-          personType: readField<string>(payload, ['person_type', 'personType'], ''),
-        }
-      })
-    : []
-
-  return {
-    status,
-    message: readField<string>(
-      row,
-      ['message', 'status_message'],
-      status === 'accepted' ? 'Entry approved.' : 'Ticket could not be consumed.',
-    ),
-    ticketCode: readField<string>(row, ['ticket_code', 'ticketCode'], ''),
-    leadGuest: readField<string>(row, ['lead_guest', 'lead_name', 'lead_full_name'], ''),
-    leadInstagram: readField<string>(
-      row,
-      ['lead_instagram', 'lead_instagram_username'],
-      '',
-    ),
-    leadGender: readField<string>(row, ['lead_gender'], ''),
-    totalPeople: Number(readField<number>(row, ['total_people'], 0)),
-    groupCode: readField<string | null>(row, ['group_code'], null),
-    members,
-  }
-}
-
-function needsSignatureFallback(error: PostgrestError) {
-  return error.code === 'PGRST202' || error.message.includes('function public.consume_guest_ticket_once')
-}
-
-async function consumeTicketViaRpc(rawInput: string) {
-  const supabase = getSupabaseClient()
-
-  const candidateArgs: RpcArgs[] = [
-    { p_qr_payload: rawInput },
-    { p_ticket_code: rawInput },
-    { p_qr_or_ticket: rawInput },
-    { qr_payload: rawInput },
-    { ticket_code: rawInput },
-    { code: rawInput },
-  ]
-
-  let lastError: PostgrestError | null = null
-
-  for (const args of candidateArgs) {
-    const { data, error } = await supabase.rpc('consume_guest_ticket_once', args)
-
-    if (!error) {
-      return data
-    }
-
-    if (needsSignatureFallback(error)) {
-      lastError = error
-      continue
-    }
-
-    throw error
-  }
-
-  if (lastError) {
-    throw lastError
-  }
-
-  throw new Error('Could not consume ticket.')
+  return 'invalid'
 }
 
 function GateScannerPage() {
@@ -134,20 +52,80 @@ function GateScannerPage() {
       return
     }
 
+    const parsedTicketCode = parseTicketCode(rawValue)
+
+    if (!parsedTicketCode) {
+      setResult({
+        status: 'invalid',
+        message: 'Ticket code is empty after parsing.',
+      })
+      return
+    }
+
     lockRef.current = true
     setError('')
     setIsConsuming(true)
 
     try {
-      const data = await consumeTicketViaRpc(rawValue.trim())
-      setResult(parseScanResult(data))
+      const supabase = getSupabaseClient()
+      const { data, error } = await supabase.rpc('consume_guest_ticket_once', {
+        p_ticket_code: parsedTicketCode,
+        p_scanned_by: 'gate',
+        p_device_info: 'mobile',
+      })
+
+      console.log('SCAN DATA:', data)
+      console.log('RPC RESPONSE:', data)
+      console.log('RPC ERROR:', error)
+
+      if (error) {
+        setResult({
+          status: 'error',
+          message: error.message || 'Scan failed',
+        })
+        return
+      }
+
+      if (!data || typeof data !== 'object') {
+        setResult({
+          status: 'error',
+          message: 'Invalid response from server',
+        })
+        return
+      }
+
+      const payload = data as Record<string, unknown>
+
+      if (payload.ok === true) {
+        const members = Array.isArray(payload.members) ? payload.members : []
+        const leadGuest = typeof payload.lead_full_name === 'string'
+          ? payload.lead_full_name
+          : ''
+
+        setResult({
+          status: 'accepted',
+          message: 'Entry approved.',
+          leadGuest,
+          members: members as ScanOutcome['members'],
+          membersDebug: JSON.stringify(payload.members),
+        })
+      } else {
+        setResult({
+          status: normalizeStatus(payload.result),
+          message:
+            typeof payload.message === 'string' && payload.message.trim()
+              ? payload.message
+              : 'Ticket invalid',
+        })
+      }
     } catch (consumeErr) {
-      setResult(null)
-      setError(
+      setResult({
+        status: 'error',
+        message:
         consumeErr instanceof Error
           ? consumeErr.message
           : 'Ticket consumption failed.',
-      )
+      })
     } finally {
       setIsConsuming(false)
       lockRef.current = false
