@@ -7,7 +7,6 @@ import { GuestCard } from '@/components/GuestCard'
 import { PaymentUpload } from '@/components/PaymentUpload'
 import { QRSuccessCard } from '@/components/QRSuccessCard'
 import { getSupabaseClient } from '@/lib/supabase'
-import { sendTicketEmailPlaceholder } from '@/server/ticket-email.functions'
 import type { Gender, GuestMember, SignupSuccess, UploadInfo } from '@/types/guest'
 
 const MAX_GROUP_SIZE = 8
@@ -495,16 +494,30 @@ function SignupPage() {
       setSuccess(parsed)
 
       try {
-        await sendTicketEmailPlaceholder({
-          data: {
-            eventName: 'Afterlife Club 2026',
-            ticketCode: parsed.ticketCode,
-            recipientEmail: trimValue(leadEmail),
-            qrPayload: parsed.qrPayload,
+        const emailResponse = await fetch('/.netlify/functions/send-ticket-email', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
           },
+          body: JSON.stringify({
+            email: trimValue(leadEmail),
+            name: trimValue(leadName),
+            qrCodeUrl: parsed.qrPayload,
+            ticketCode: parsed.ticketCode,
+            paymentMode: paymentMode as PaymentMode,
+            groupMembers: additionalGuests.map((guest) => ({
+              name: trimValue(guest.fullName),
+              instagram: trimValue(guest.instagram),
+              gender: guest.gender,
+            })),
+          }),
         })
+
+        if (!emailResponse.ok) {
+          throw new Error('Ticket email request failed.')
+        }
       } catch {
-        // Email placeholder is non-blocking.
+        // Ticket email send is intentionally non-blocking.
       }
     } catch (submitErr) {
       console.error('final submit error', submitErr)
