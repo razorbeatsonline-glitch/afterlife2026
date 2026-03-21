@@ -62,6 +62,11 @@ export type AdminGroupDetail = {
     status: string | null
     paymentScreenshotUrl: string | null
     paymentScreenshotPath: string | null
+    paymentMode: string | null
+    totalAmount: number | null
+    payerType: string | null
+    groupMemberCount: number | null
+    femaleCount: number | null
   } | null
   latestTicket: {
     id: string
