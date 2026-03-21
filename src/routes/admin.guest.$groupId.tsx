@@ -191,6 +191,32 @@ function AdminGuestDetailPage() {
               />
               <DetailItem label="Submission Status" value={detail.latestSubmission?.status} />
               <DetailItem label="Submitted At" value={formatDateTime(detail.latestSubmission?.createdAt)} />
+              <DetailItem label="Payment Mode" value={detail.latestSubmission?.paymentMode} />
+              <DetailItem
+                label="Total Amount"
+                value={
+                  typeof detail.latestSubmission?.totalAmount === 'number'
+                    ? `Rs ${detail.latestSubmission.totalAmount}`
+                    : null
+                }
+              />
+              <DetailItem label="Payer Type" value={detail.latestSubmission?.payerType} />
+              <DetailItem
+                label="Group Size"
+                value={
+                  typeof detail.latestSubmission?.groupMemberCount === 'number'
+                    ? String(detail.latestSubmission.groupMemberCount)
+                    : null
+                }
+              />
+              <DetailItem
+                label="Female Count"
+                value={
+                  typeof detail.latestSubmission?.femaleCount === 'number'
+                    ? String(detail.latestSubmission.femaleCount)
+                    : null
+                }
+              />
 
               <div className="space-y-2 rounded-2xl border border-white/10 bg-black/20 p-3">
                 <p className="text-[0.66rem] uppercase tracking-[0.22em] text-red-200/75">

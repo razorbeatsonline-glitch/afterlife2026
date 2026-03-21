@@ -3,8 +3,12 @@ import { useMemo, useState } from 'react'
 import { getSupabaseClient } from '@/lib/supabase'
 import type { Gender, UploadInfo } from '@/types/guest'
 
+type PaymentMode = 'pay_self' | 'pay_group' | 'group_paid' | ''
+
 type PaymentUploadProps = {
   leadGender: Gender | ''
+  paymentMode: PaymentMode
+  totalAmount: number
   value: UploadInfo | null
   onUploaded: (upload: UploadInfo | null) => void
   onUploadStatusChange?: (uploading: boolean) => void
@@ -17,6 +21,8 @@ function getFileExtension(fileName: string) {
 
 export function PaymentUpload({
   leadGender,
+  paymentMode,
+  totalAmount,
   value,
   onUploaded,
   onUploadStatusChange,
@@ -26,13 +32,19 @@ export function PaymentUpload({
   const [error, setError] = useState('')
 
   const hasUpload = useMemo(() => Boolean(value?.url), [value])
-  const requiredPayment = useMemo(() => {
-    if (leadGender === 'female') {
-      return 1500
+  const leadPayment = useMemo(() => (leadGender === 'female' ? 1500 : 2000), [leadGender])
+  const shouldShowPricing = paymentMode !== 'group_paid'
+  const paymentHeading = useMemo(() => {
+    if (paymentMode === 'pay_group') {
+      return 'You are paying for your group'
     }
 
-    return 2000
-  }, [leadGender])
+    if (paymentMode === 'group_paid') {
+      return 'Your group has already paid'
+    }
+
+    return 'You are paying for yourself'
+  }, [paymentMode])
 
   const handleFileSelect = async (file: File | null) => {
     if (!file) {
@@ -95,12 +107,17 @@ export function PaymentUpload({
           Payment Details
         </h4>
         <div className="rounded-xl border border-red-200/20 bg-black/35 px-3 py-2.5">
-          <p className="text-[0.69rem] uppercase tracking-[0.16em] text-red-200/80">
-            Required Payment
-          </p>
-          <p className="mt-1 text-lg font-semibold text-white sm:text-xl">
-            Rs {requiredPayment}
-          </p>
+          <p className="text-sm text-red-50">{paymentHeading}</p>
+          {shouldShowPricing ? (
+            <>
+              <p className="mt-2 text-[0.69rem] uppercase tracking-[0.16em] text-red-200/80">
+                Total
+              </p>
+              <p className="mt-1 text-lg font-semibold text-white sm:text-xl">
+                Rs {totalAmount || leadPayment}
+              </p>
+            </>
+          ) : null}
         </div>
         <dl className="space-y-2.5">
           <div className="rounded-xl border border-white/12 bg-black/30 px-3 py-2.5">

@@ -65,6 +65,7 @@ type GroupSubmissionDetailRow = {
   status: string | null
   payment_screenshot_url: string | null
   payment_screenshot_path: string | null
+  raw_payload: Record<string, unknown> | null
 }
 
 type GroupTicketDetailRow = {
@@ -392,6 +393,7 @@ export async function fetchAdminGroupDetail(
           'status',
           'payment_screenshot_url',
           'payment_screenshot_path',
+          'raw_payload',
         ].join(', '),
       )
       .eq('group_id', groupId)
@@ -443,6 +445,28 @@ export async function fetchAdminGroupDetail(
   const memberData = (membersRes.data ?? []) as unknown as GroupMemberDetailRow[]
   const submissionData = submissionRes.data as unknown as GroupSubmissionDetailRow | null
   const ticketData = ticketRes.data as unknown as GroupTicketDetailRow | null
+  const rawPayload = submissionData?.raw_payload ?? null
+  const totalAmountRaw = rawPayload?.calculated_total_amount
+  const groupMemberCountRaw = rawPayload?.group_member_count
+  const femaleCountRaw = rawPayload?.female_count
+  const totalAmount =
+    typeof totalAmountRaw === 'number'
+      ? totalAmountRaw
+      : typeof totalAmountRaw === 'string'
+        ? Number(totalAmountRaw)
+        : null
+  const groupMemberCount =
+    typeof groupMemberCountRaw === 'number'
+      ? groupMemberCountRaw
+      : typeof groupMemberCountRaw === 'string'
+        ? Number(groupMemberCountRaw)
+        : null
+  const femaleCount =
+    typeof femaleCountRaw === 'number'
+      ? femaleCountRaw
+      : typeof femaleCountRaw === 'string'
+        ? Number(femaleCountRaw)
+        : null
 
   return {
     id: groupData.id,
@@ -473,6 +497,12 @@ export async function fetchAdminGroupDetail(
           status: submissionData.status,
           paymentScreenshotUrl: submissionData.payment_screenshot_url,
           paymentScreenshotPath: submissionData.payment_screenshot_path,
+          paymentMode:
+            typeof rawPayload?.payment_mode === 'string' ? rawPayload.payment_mode : null,
+          totalAmount: Number.isFinite(totalAmount) ? totalAmount : null,
+          payerType: typeof rawPayload?.payer_type === 'string' ? rawPayload.payer_type : null,
+          groupMemberCount: Number.isFinite(groupMemberCount) ? groupMemberCount : null,
+          femaleCount: Number.isFinite(femaleCount) ? femaleCount : null,
         }
       : null,
     latestTicket: ticketData
